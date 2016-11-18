@@ -75,7 +75,7 @@
     "id":          1,
     "url":         "http://deploy.server/project/hook",
     "contentType": "json",
-    "active":      true
+    "active":      false
 }
 ```
 
