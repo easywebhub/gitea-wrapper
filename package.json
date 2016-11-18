@@ -1,0 +1,27 @@
+{
+  "name": "gogs-wrapper",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/easywebhub/gogs-wrapper.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/easywebhub/gogs-wrapper/issues"
+  },
+  "homepage": "https://github.com/easywebhub/gogs-wrapper#readme",
+  "dependencies": {
+    "bluebird": "^3.4.6",
+    "minimist": "^1.2.0",
+    "node-restify-validation": "^1.0.5",
+    "request": "^2.78.0",
+    "request-promise": "^4.1.1",
+    "restify": "^4.2.0"
+  }
+}
