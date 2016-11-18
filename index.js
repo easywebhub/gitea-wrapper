@@ -5,11 +5,9 @@ const Restify = require('restify');
 const Request = require('request-promise');
 const RestifyValidation = require('node-restify-validation');
 const Fs = Promise.promisifyAll(require('fs'));
-const TokenStore = require('./token-store');
-const GogsClient = require('./gogs-client');
 
 const argv = require('minimist')(process.argv.slice(2));
-
+console.dir(argv);
 const PORT = argv.port || process.env.SERVER_PORT || 7000;
 const HOST = argv.host || process.env.SERVER_HOST || '127.0.0.1';
 const GOGS_USERNAME = argv.gogsUsername || process.env.GOGS_USERNAME || 'root';
@@ -29,19 +27,7 @@ server.gogs = {
     password: GOGS_PASSWORD
 };
 
-server.tokenStore = new TokenStore('token.json');
-server.gogsServerInfo = require('./gogs.json');
-server.gogsClient = new GogsClient(server.gogsServerInfo.url);
-
-if (!server.tokenStore.adminToken) {
-    console.log('need load token store');
-
-    (Promise.coroutine(function*() {
-        // let token = yield server.gogsClient.getToken(
-        //     server.gogsServerInfo.adminUsername,
-        //     server.gogsServerInfo.adminPassword);
-    }))();
-}
+console.log('server.gogs', server.gogs);
 
 server.pre(Restify.pre.userAgentConnection());
 server.pre(Restify.pre.sanitizePath());
