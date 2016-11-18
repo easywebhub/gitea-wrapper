@@ -27,8 +27,6 @@ server.gogs = {
     password: GOGS_PASSWORD
 };
 
-console.log('server.gogs', server.gogs);
-
 server.pre(Restify.pre.userAgentConnection());
 server.pre(Restify.pre.sanitizePath());
 

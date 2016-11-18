@@ -4,6 +4,7 @@ const Restify = require('restify');
 const Crypto = require('crypto');
 const Promise = require('bluebird');
 const Request = require('request-promise');
+// Request.debug = true;
 
 const GOGS_API_PREFIX = '/api/v1';
 
@@ -38,6 +39,9 @@ const gogsRequest = Promise.coroutine(function*(options) {
     if (options.data)
         requestOptions.data = options.data;
 
+    if (options.body)
+        requestOptions.body = options.body;
+
     let res = yield Request(requestOptions);
 
     if (res.statusCode === 403)
@@ -69,6 +73,17 @@ const gogsPost = Promise.coroutine(function*(url, data, username, password) {
         method:   'POST',
         url:      url,
         data:     data,
+        username: username,
+        password: password
+    });
+});
+
+
+const gogsPatch = Promise.coroutine(function*(url, data, username, password) {
+    return gogsRequest({
+        method:   'PATCH',
+        url:      url,
+        body:     data,
         username: username,
         password: password
     });
@@ -138,18 +153,7 @@ function responseArraySuccess(res, data, headers) {
 
 module.exports = sv => {
     server = sv;
-    /**
-     * Create new repository
-     * {
-     *      username: '',
-     *      repositoryName: ''
-     * }
-     * Response
-     * {
-     *  "html_url": "http://localhost:3000/aa/repos-1",
-     *  "full_name": "",
-     * }
-     */
+
     server.post({
         url: '/repos', validation: {
             resources: {
@@ -175,6 +179,7 @@ module.exports = sv => {
 
             if (response.statusCode === 201) {
                 let repoInfo = extractGogsRepoInfo(response.body);
+                repoInfo.username = req.params.username;
                 repoInfo.password = GenPassword(req.params.username);
                 res.json(repoInfo);
                 return res.end();
@@ -202,7 +207,10 @@ module.exports = sv => {
             if (response.statusCode === 200) {
                 let ret = [];
                 response.body.forEach(info => {
-                    ret.push(extractGogsRepoInfo(info));
+                    let repoInfo = extractGogsRepoInfo(info);
+                    repoInfo.username = req.params.username;
+                    repoInfo.password = password;
+                    ret.push(repoInfo);
                 });
                 responseArraySuccess(res, ret);
                 return res.end();
@@ -231,10 +239,10 @@ module.exports = sv => {
 
             let response = yield gogsGet(repoWebHookUrl, req.params.username, password);
 
-            console.log('response.body', response.statusCode, response.body);
+            // console.log('response.body', response.statusCode, response.body);
             if (response.statusCode === 200) {
                 let ret = [];
-                console.log('response.body', response.body);
+                // console.log('response.body', response.body);
                 response.body.forEach(webHook => {
                     ret.push(extractGogsWebHookInfo(webHook));
                 });
@@ -262,7 +270,6 @@ module.exports = sv => {
     }, Promise.coroutine(function*(req, res, next) {
         try {
             let repoWebHookUrl = server.gogs.url + GOGS_API_PREFIX + `/repos/${req.params.username}/${req.params.repositoryName}/hooks`;
-            console.log('repoWebHookUrl', repoWebHookUrl);
             let password = GenPassword(req.params.username);
 
             let postData = {
@@ -282,11 +289,53 @@ module.exports = sv => {
 
             let response = yield gogsPost(repoWebHookUrl, postData, req.params.username, password);
 
-            console.log('response.body', response.statusCode, response.body);
             if (response.statusCode === 201) {
                 res.json(extractGogsWebHookInfo(response.body));
                 return res.end();
-                // return responseArraySuccess(res, ret);
+            }
+            return next(new Restify.ExpectationFailedError(response.body));
+        } catch (error) {
+            if (error.message === 'invalid gogs admin credential')
+                return next(new Restify.InternalServerError(error.message));
+            return next(new Restify.InternalServerError(error.message));
+        }
+    }));
+
+    // edit web hook
+    server.patch({
+        url: '/repos/:username/:repositoryName/hooks/:id', validation: {
+            resources: {
+                username:       {isRequired: true, isAlphanumeric: true},
+                repositoryName: {isRequired: true, notRegex: /[0-9a-zA-Z\-_]+/g},
+                id:             {isRequired: true, isAlphanumeric: true},
+                url:            {isRequired: false, isUrl: true},
+                active:         {isRequired: false, isIn: ['false', 'true']},
+                secret:         {isRequired: false, notRegex: /[0-9a-zA-Z\-_]+/g}
+            }
+        }
+    }, Promise.coroutine(function*(req, res, next) {
+        try {
+            let repoWebHookUrl = server.gogs.url + GOGS_API_PREFIX + `/repos/${req.params.username}/${req.params.repositoryName}/hooks/${req.params.id}`;
+            // let password = GenPassword(req.params.username);
+
+            let postData = {
+                config: {}
+            };
+
+            if (req.params.active !== undefined) postData.active = req.params.active;
+            if (req.params.url) postData.config.url = req.params.url;
+            if (req.params.secret) postData.config.secret = req.params.secret;
+
+            if (req.params.secret) {
+                postData.config.secret = req.params.secret;
+            }
+
+            let response = yield gogsPatch(repoWebHookUrl, postData);
+
+            console.log('response.body', response.statusCode, response.body);
+            if (response.statusCode === 200) {
+                res.json(extractGogsWebHookInfo(response.body));
+                return res.end();
             }
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
@@ -329,9 +378,6 @@ module.exports = sv => {
         }
     }));
 
-    // edit web hook
-
-    // list, add, remove repo's web-hook
     // list, add, remove collaborator to repo
 
     // update user enable create web hook
