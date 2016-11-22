@@ -158,7 +158,7 @@ module.exports = sv => {
         url: '/repos', validation: {
             resources: {
                 username:       {isRequired: true, isAlphanumeric: true},
-                repositoryName: {isRequired: true, notRegex: /[0-9a-zA-Z\-_]+/g}
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
             }
         }
     }, Promise.coroutine(function*(req, res, next) {
@@ -217,8 +217,6 @@ module.exports = sv => {
             }
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
-            if (error.message === 'invalid gogs admin credential')
-                return next(new Restify.InternalServerError(error.message));
             return next(new Restify.InternalServerError(error.message));
         }
     }));
@@ -228,13 +226,12 @@ module.exports = sv => {
         url: '/repos/:username/:repositoryName/hooks', validation: {
             resources: {
                 username:       {isRequired: true, isAlphanumeric: true},
-                repositoryName: {isRequired: true, notRegex: /[0-9a-zA-Z\-_]+/g}
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
             }
         }
     }, Promise.coroutine(function*(req, res, next) {
         try {
             let repoWebHookUrl = server.gogs.url + GOGS_API_PREFIX + `/repos/${req.params.username}/${req.params.repositoryName}/hooks`;
-            console.log('repoWebHookUrl', repoWebHookUrl);
             let password = GenPassword(req.params.username);
 
             let response = yield gogsGet(repoWebHookUrl, req.params.username, password);
@@ -250,8 +247,6 @@ module.exports = sv => {
             }
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
-            if (error.message === 'invalid gogs admin credential')
-                return next(new Restify.InternalServerError(error.message));
             return next(new Restify.InternalServerError(error.message));
         }
     }));
@@ -261,9 +256,9 @@ module.exports = sv => {
         url: '/repos/:username/:repositoryName/hooks', validation: {
             resources: {
                 username:       {isRequired: true, isAlphanumeric: true},
-                repositoryName: {isRequired: true, notRegex: /[0-9a-zA-Z\-_]+/g},
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
                 url:            {isRequired: true, isUrl: true},
-                secret:         {isRequired: false, notRegex: /[0-9a-zA-Z\-_]+/g},
+                secret:         {isRequired: false, regex: /^[0-9a-zA-Z\-_]+$/},
 
             }
         }
@@ -295,8 +290,6 @@ module.exports = sv => {
             }
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
-            if (error.message === 'invalid gogs admin credential')
-                return next(new Restify.InternalServerError(error.message));
             return next(new Restify.InternalServerError(error.message));
         }
     }));
@@ -306,11 +299,11 @@ module.exports = sv => {
         url: '/repos/:username/:repositoryName/hooks/:id', validation: {
             resources: {
                 username:       {isRequired: true, isAlphanumeric: true},
-                repositoryName: {isRequired: true, notRegex: /[0-9a-zA-Z\-_]+/g},
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]$/},
                 id:             {isRequired: true, isAlphanumeric: true},
                 url:            {isRequired: false, isUrl: true},
                 active:         {isRequired: false, isIn: ['false', 'true']},
-                secret:         {isRequired: false, notRegex: /[0-9a-zA-Z\-_]+/g}
+                secret:         {isRequired: false, regex: /^[0-9a-zA-Z\-_]$/}
             }
         }
     }, Promise.coroutine(function*(req, res, next) {
@@ -339,8 +332,6 @@ module.exports = sv => {
             }
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
-            if (error.message === 'invalid gogs admin credential')
-                return next(new Restify.InternalServerError(error.message));
             return next(new Restify.InternalServerError(error.message));
         }
     }));
@@ -350,7 +341,7 @@ module.exports = sv => {
         url: '/repos/:username/:repositoryName/hooks/:id', validation: {
             resources: {
                 username:       {isRequired: true, isAlphanumeric: true},
-                repositoryName: {isRequired: true, notRegex: /[0-9a-zA-Z\-_]+/g},
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]$/},
                 id:             {isRequired: true, isAlphanumeric: true}
             }
         }
@@ -372,8 +363,6 @@ module.exports = sv => {
             }
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
-            if (error.message === 'invalid gogs admin credential')
-                return next(new Restify.InternalServerError(error.message));
             return next(new Restify.InternalServerError(error.message));
         }
     }));

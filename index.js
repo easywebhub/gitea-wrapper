@@ -7,7 +7,7 @@ const RestifyValidation = require('node-restify-validation');
 const Fs = Promise.promisifyAll(require('fs'));
 
 const argv = require('minimist')(process.argv.slice(2));
-console.dir(argv);
+
 const PORT = argv.port || process.env.SERVER_PORT || 7000;
 const HOST = argv.host || process.env.SERVER_HOST || '127.0.0.1';
 const GOGS_USERNAME = argv.gogsUsername || process.env.GOGS_USERNAME || 'root';
@@ -38,7 +38,7 @@ server.use(RestifyValidation.validationPlugin({
     // Shows errors as an array
     errorsAsArray:            false,
     // Not exclude incoming variables not specified in validator rules
-    forbidUndefinedVariables: false,
+    // forbidUndefinedVariables: false,
     errorHandler:             Restify.errors.InvalidArgumentError
 }));
 
