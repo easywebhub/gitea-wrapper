@@ -22,10 +22,12 @@ function GenPassword(username) {
 const gogsRequest = Promise.coroutine(function*(options) {
     let username = options.username || server.gogs.username;
     let password = options.password || server.gogs.password;
+    let headers = options.headers || {};
 
     let requestOptions = {
         method:                  options.method,
         uri:                     options.url,
+        headers:                 headers,
         simple:                  false,
         json:                    true,
         resolveWithFullResponse: true,
@@ -72,9 +74,13 @@ const gogsPost = Promise.coroutine(function*(url, data, username, password) {
     return gogsRequest({
         method:   'POST',
         url:      url,
-        data:     data,
+        body:     data,
         username: username,
-        password: password
+        password: password,
+        json:     true,
+        headers:  {
+            'Content-Type': 'application/json'
+        }
     });
 });
 
@@ -85,7 +91,11 @@ const gogsPatch = Promise.coroutine(function*(url, data, username, password) {
         url:      url,
         body:     data,
         username: username,
-        password: password
+        password: password,
+        json:     true,
+        headers:  {
+            'Content-Type': 'application/json'
+        }
     });
 });
 
@@ -100,6 +110,7 @@ const getUserInfo = Promise.coroutine(function*(username) {
 
 const createUser = Promise.coroutine(function*(username) {
     let url = server.gogs.url + GOGS_API_PREFIX + `/admin/users`;
+    // NOTE if username is 'user' gogs will fail
     let postData = {
         username: username,
         email:    `${username}@email.com`,
@@ -111,6 +122,7 @@ const createUser = Promise.coroutine(function*(username) {
 
 const createUserIfNotExists = Promise.coroutine(function*(username) {
     let user = yield getUserInfo(username);
+    // console.log('createUserIfNotExists user', user);
     if (user)
         return user;
 
@@ -118,7 +130,7 @@ const createUserIfNotExists = Promise.coroutine(function*(username) {
 });
 
 const extractGogsRepoInfo = function (gogsRepoInfo) {
-    console.log('gogsRepoInfo', gogsRepoInfo);
+    // console.log('gogsRepoInfo', gogsRepoInfo);
     return {
         id:       gogsRepoInfo['id'],
         fullName: gogsRepoInfo['full_name'],
@@ -172,10 +184,11 @@ module.exports = sv => {
                 name:    req.params.repositoryName,
                 private: true
             });
+            // console.log('response', response);
 
             if (response.statusCode === 422)
                 return next(new Restify.ConflictError(response.body.message ?
-                    response.body.message : 'gogs failed to create repository'));
+                    response.body.message : JSON.stringify(response.body)));
 
             if (response.statusCode === 201) {
                 let repoInfo = extractGogsRepoInfo(response.body);
@@ -325,7 +338,7 @@ module.exports = sv => {
 
             let response = yield gogsPatch(repoWebHookUrl, postData);
 
-            console.log('response.body', response.statusCode, response.body);
+            // console.log('response.body', response.statusCode, response.body);
             if (response.statusCode === 200) {
                 res.json(extractGogsWebHookInfo(response.body));
                 return res.end();
@@ -356,7 +369,7 @@ module.exports = sv => {
 
             let response = yield gogsDel(repoWebHookUrl, req.params.username, password);
 
-            console.log('response.body', response.statusCode, response.body);
+            // console.log('response.body', response.statusCode, response.body);
             if (response.statusCode === 204) {
                 res.json(extractGogsWebHookInfo(response.body));
                 return res.end();
