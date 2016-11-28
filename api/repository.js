@@ -4,6 +4,7 @@ const Restify = require('restify');
 const Crypto = require('crypto');
 const Promise = require('bluebird');
 const Request = require('request-promise');
+const Url = require('url');
 // Request.debug = true;
 
 const GOGS_API_PREFIX = '/api/v1';
@@ -194,6 +195,12 @@ module.exports = sv => {
                 let repoInfo = extractGogsRepoInfo(response.body);
                 repoInfo.username = req.params.username;
                 repoInfo.password = GenPassword(req.params.username);
+
+                // add username and password to gogs repo's url
+                let uri = Url.parse(repoInfo.url);
+                uri.auth = `${repoInfo.username}:${repoInfo.password}`;
+                repoInfo.url = Url.format(uri);
+
                 res.json(repoInfo);
                 return res.end();
             }
