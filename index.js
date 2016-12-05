@@ -10,9 +10,9 @@ const argv = require('minimist')(process.argv.slice(2));
 
 const PORT = argv.port || process.env.SERVER_PORT || 7000;
 const HOST = argv.host || process.env.SERVER_HOST || '127.0.0.1';
-const GOGS_USERNAME = argv.gogsUsername || process.env.GOGS_USERNAME || 'easyweb';
-const GOGS_PASSWORD = argv.gogsPassword || process.env.GOGS_PASSWORD || 'Vinaas!@#456';
-const GOGS_URL = argv.gogsUrl || process.env.GOGS_URL || 'http://source.easywebhub.com';
+const GOGS_USERNAME = argv.gogsUsername || process.env.GOGS_USERNAME || 'admin';
+const GOGS_PASSWORD = argv.gogsPassword || process.env.GOGS_PASSWORD || 'pass';
+const GOGS_URL = argv.gogsUrl || process.env.GOGS_URL || 'http://127.0.0.1/gogs';
 
 const AppInfo = require('./package.json');
 
