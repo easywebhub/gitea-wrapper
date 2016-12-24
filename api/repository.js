@@ -32,6 +32,7 @@ const gogsRequest = Promise.coroutine(function*(options) {
         simple:                  false,
         json:                    true,
         resolveWithFullResponse: true,
+        followAllRedirects:      true,
         auth:                    {
             user:            username,
             pass:            password,
@@ -265,6 +266,7 @@ module.exports = sv => {
                 });
                 return responseArraySuccess(res, ret);
             }
+            
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
             return next(new Restify.InternalServerError(error.message));
@@ -319,11 +321,10 @@ module.exports = sv => {
         url: '/repos/:username/:repositoryName/hooks/:id', validation: {
             resources: {
                 username:       {isRequired: true, isAlphanumeric: true},
-                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]$/},
                 id:             {isRequired: true, isAlphanumeric: true},
                 url:            {isRequired: false, isUrl: true},
                 active:         {isRequired: false, isIn: ['false', 'true']},
-                secret:         {isRequired: false, regex: /^[0-9a-zA-Z\-_]$/}
+                secret:         {isRequired: false, regex: /^[0-9a-zA-Z\-_]+$/}
             }
         }
     }, Promise.coroutine(function*(req, res, next) {
@@ -337,12 +338,11 @@ module.exports = sv => {
 
             if (req.params.active !== undefined) postData.active = req.params.active;
             if (req.params.url) postData.config.url = req.params.url;
-            if (req.params.secret) postData.config.secret = req.params.secret;
-
             if (req.params.secret) {
-                postData.config.secret = req.params.secret;
-            }
-
+				postData.config.secret = req.params.secret;
+				postData.secret = req.params.secret;
+			}
+			//console.log('postData', postData);
             let response = yield gogsPatch(repoWebHookUrl, postData);
 
             // console.log('response.body', response.statusCode, response.body);
