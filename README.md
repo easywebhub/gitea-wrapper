@@ -38,7 +38,7 @@
 }
 ```
 
-#### Get username's repositories `GET` `/:username/repos`
+#### Get username's repositories `GET` `/repos/:username`
 ```
 {
     "data":         data, // array of respository info (like response of create repository)
