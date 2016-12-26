@@ -266,7 +266,7 @@ module.exports = sv => {
                 });
                 return responseArraySuccess(res, ret);
             }
-            
+
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
             return next(new Restify.InternalServerError(error.message));
@@ -369,10 +369,6 @@ module.exports = sv => {
         try {
             let repoWebHookUrl = server.gogs.url + GOGS_API_PREFIX + `/repos/${req.params.username}/${req.params.repositoryName}/hooks/${req.params.id}`;
             let password = GenPassword(req.params.username);
-
-            if (req.params.secret) {
-                postData.config.secret = req.params.secret;
-            }
 
             let response = yield gogsDel(repoWebHookUrl, req.params.username, password);
 
