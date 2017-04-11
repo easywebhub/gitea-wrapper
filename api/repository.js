@@ -4,6 +4,7 @@ const Restify = require('restify');
 const Crypto = require('crypto');
 const Promise = require('bluebird');
 const Request = require('request-promise');
+const _ = require('lodash');
 const Url = require('url');
 // Request.debug = true;
 
@@ -21,8 +22,8 @@ function GenPassword(username) {
 }
 
 const gogsRequest = Promise.coroutine(function*(options) {
-    let username = options.username || server.gogs.username;
-    let password = options.password || server.gogs.password;
+    let username = server.gogs.username;
+    let password = server.gogs.password;
     let headers = options.headers || {};
 
     let requestOptions = {
@@ -42,6 +43,9 @@ const gogsRequest = Promise.coroutine(function*(options) {
 
     if (options.data)
         requestOptions.data = options.data;
+
+    if (options.form)
+        requestOptions.form = options.form;
 
     if (options.body)
         requestOptions.body = options.body;
@@ -83,6 +87,17 @@ const gogsPost = Promise.coroutine(function*(url, data, username, password) {
         headers:  {
             'Content-Type': 'application/json'
         }
+    });
+});
+
+const gogsPostForm = Promise.coroutine(function*(url, data, username, password) {
+    return gogsRequest({
+        method:   'POST',
+        url:      url,
+        form:     data,
+        username: username,
+        password: password,
+        json:     false
     });
 });
 
@@ -135,6 +150,7 @@ const extractGogsRepoInfo = function (gogsRepoInfo) {
     // console.log('gogsRepoInfo', gogsRepoInfo);
     return {
         id:       gogsRepoInfo['id'],
+        name:     gogsRepoInfo['name'],
         fullName: gogsRepoInfo['full_name'],
         url:      gogsRepoInfo['clone_url'],
         private:  gogsRepoInfo['private']
@@ -165,8 +181,104 @@ function responseArraySuccess(res, data, headers) {
     }, headers);
 }
 
+function GetCsrfToken(html) {
+    let matches = html.match(/_csrf" content="([^"]+)"/);
+    if (matches.length !== 2) return null;
+    return matches[1];
+}
+
+function GetUid(html) {
+    let matches = html.match(/id="uid" name="uid" value="([^"]+)"/);
+    if (matches.length !== 2) return null;
+    return matches[1];
+}
+
 module.exports = sv => {
     server = sv;
+
+    server.post({
+        url: '/migration', validation: {
+            resources: {
+                username:       {isRequired: true, isAlphanumeric: true},
+                templateName:   {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
+            }
+        }
+    }, Promise.coroutine(function*(req, res, next) {
+        try {
+            // create user if not exists
+            let user = yield createUserIfNotExists(req.params.username);
+            let password = GenPassword(req.params.username);
+            // get csrf token from GET http://localhost:3000/repo/migrate
+            let migrationRepoUrl = server.gogs.url + `/repo/migrate`;
+
+            let html = yield gogsGet(migrationRepoUrl, req.params.username, password);
+            if (html.statusCode !== 200)
+                return next(new Restify.InternalServerError('invalid user credential'));
+            let csrfToken = GetCsrfToken(html.body);
+            let uid = GetUid(html.body);
+
+            // migration POST repo http://localhost:3000/repo/migrate
+            let templateRepositoryUrl = `${server.gogs.url}/${server.gogs.templateUsername}/${req.params.templateName}.git`;
+
+            let response = yield gogsPostForm(migrationRepoUrl, {
+                _csrf:         csrfToken,
+                clone_addr:    templateRepositoryUrl,
+                auth_username: server.gogs.templateUsername,
+                auth_password: server.gogs.templatePassword,
+                uid:           uid,
+                repo_name:     req.params.repositoryName,
+                private:       'on',
+                description:   ''
+            }, req.params.username, password);
+
+            if (response.statusCode !== 200) {
+                return next(new Restify.InternalServerError(response.body));
+            }
+
+            // migration failed too
+            if (response.body.indexOf('master') === -1) {
+                let matches = response.body.match(/ui negative message">[\r\n\s.]+<p>(.+)<\/p>/);
+                if (matches.length === 2) {
+                    return next(new Restify.InternalServerError(matches[1]));
+                } else {
+                    return next(new Restify.InternalServerError('migration failed, invalid src repository ?'));
+                }
+            } else {
+                console.log('migration success');
+                let repoInfo = yield getRepoInfo(req.params.username, req.params.repositoryName);
+                res.json(repoInfo);
+            }
+        } catch (error) {
+            return next(new Restify.InternalServerError(error.message));
+        }
+    }));
+
+    const getRepoInfo = Promise.coroutine(function*(username, repoName) {
+        // get all user's repo
+        let createRepoUrl = server.gogs.url + GOGS_API_PREFIX + `/user/repos`;
+        let password = GenPassword(username);
+
+        let response = yield gogsGet(createRepoUrl, username, password);
+
+        if (response.statusCode !== 200) {
+            return null;
+        }
+
+        // find match repoName
+        let infoList = _.map(response.body, info => {
+            let repoInfo = extractGogsRepoInfo(info);
+            repoInfo.username = username;
+            repoInfo.password = password;
+            return repoInfo;
+        });
+
+        let matchRepo = _.find(infoList, info => {
+            return info.name === repoName;
+        });
+
+        return matchRepo;
+    });
 
     server.post({
         url: '/repos', validation: {
@@ -320,11 +432,11 @@ module.exports = sv => {
     server.patch({
         url: '/repos/:username/:repositoryName/hooks/:id', validation: {
             resources: {
-                username:       {isRequired: true, isAlphanumeric: true},
-                id:             {isRequired: true, isAlphanumeric: true},
-                url:            {isRequired: false, isUrl: true},
-                active:         {isRequired: false, isIn: ['false', 'true']},
-                secret:         {isRequired: false, regex: /^[0-9a-zA-Z\-_]+$/}
+                username: {isRequired: true, isAlphanumeric: true},
+                id:       {isRequired: true, isAlphanumeric: true},
+                url:      {isRequired: false, isUrl: true},
+                active:   {isRequired: false, isIn: ['false', 'true']},
+                secret:   {isRequired: false, regex: /^[0-9a-zA-Z\-_]+$/}
             }
         }
     }, Promise.coroutine(function*(req, res, next) {
@@ -339,10 +451,10 @@ module.exports = sv => {
             if (req.params.active !== undefined) postData.active = req.params.active;
             if (req.params.url) postData.config.url = req.params.url;
             if (req.params.secret) {
-				postData.config.secret = req.params.secret;
-				postData.secret = req.params.secret;
-			}
-			//console.log('postData', postData);
+                postData.config.secret = req.params.secret;
+                postData.secret = req.params.secret;
+            }
+            //console.log('postData', postData);
             let response = yield gogsPatch(repoWebHookUrl, postData);
 
             // console.log('response.body', response.statusCode, response.body);

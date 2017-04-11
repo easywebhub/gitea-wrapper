@@ -2,3 +2,7 @@
 /token.json
 /gogs
 /node_modules
+/gitea/repositories
+/gitea/data
+/gitea/indexers
+/gitea/lfs

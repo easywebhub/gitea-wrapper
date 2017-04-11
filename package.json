@@ -18,6 +18,7 @@
   "homepage": "https://github.com/easywebhub/gogs-wrapper#readme",
   "dependencies": {
     "bluebird": "^3.4.6",
+    "lodash": "^4.17.4",
     "minimist": "^1.2.0",
     "node-restify-validation": "^1.0.5",
     "request": "^2.78.0",

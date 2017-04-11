@@ -12,6 +12,8 @@ const PORT = argv.port || process.env.SERVER_PORT || 7000;
 const HOST = argv.host || process.env.SERVER_HOST || '127.0.0.1';
 const GOGS_USERNAME = argv.gogsUsername || process.env.GOGS_USERNAME || 'admin';
 const GOGS_PASSWORD = argv.gogsPassword || process.env.GOGS_PASSWORD || 'pass';
+const GOGS_TEMPLATE_USERNAME = argv.gogsTemplateUsername || process.env.GOGS_TEMPLATE_USERNAME || 'templates';
+const GOGS_TEMPLATE_PASSWORD = argv.gogsTemplatePassword || process.env.GOGS_TEMPLATE_PASWORD || 'templatesquantri';
 const GOGS_URL = argv.gogsUrl || process.env.GOGS_URL || 'http://127.0.0.1/gogs';
 
 const AppInfo = require('./package.json');
@@ -22,9 +24,11 @@ const server = Restify.createServer({
 });
 
 server.gogs = {
-    url:      GOGS_URL,
-    username: GOGS_USERNAME,
-    password: GOGS_PASSWORD
+    url:              GOGS_URL,
+    username:         GOGS_USERNAME,
+    password:         GOGS_PASSWORD,
+    templateUsername: GOGS_TEMPLATE_USERNAME,
+    templatePassword: GOGS_TEMPLATE_PASSWORD
 };
 
 server.pre(Restify.pre.userAgentConnection());
@@ -36,10 +40,10 @@ server.use(Restify.queryParser());
 server.use(Restify.bodyParser());
 server.use(RestifyValidation.validationPlugin({
     // Shows errors as an array
-    errorsAsArray:            false,
+    errorsAsArray: false,
     // Not exclude incoming variables not specified in validator rules
     // forbidUndefinedVariables: false,
-    errorHandler:             Restify.errors.InvalidArgumentError
+    errorHandler:  Restify.errors.InvalidArgumentError
 }));
 
 
