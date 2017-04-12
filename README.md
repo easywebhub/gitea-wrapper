@@ -38,6 +38,28 @@
 }
 ```
 
+#### New repository migrate from template `POST` `/migration`
+##### JSON post data
+```
+{
+    "username": "user",
+    "templateName": "template-name", // template repository name from 'templates' account
+    "repositoryName": "myRepo" // valid char: 0-9 a-z A-Z - _
+}
+```
+#### Response
+```
+{
+	"id": 22,
+	"name": "pillar-clone",
+	"fullName": "quantri/pillar-clone",
+	"url": "http://localhost:3000/quantri/pillar-clone.git",
+	"private": true,
+	"username": "newUser",
+	"password": "b03ecb72deb6c8qweqee2e21aa66cf6ab38ff0ba10353f329cb6d59513c433"
+}
+```
+
 #### Get username's repositories `GET` `/repos/:username`
 ```
 {

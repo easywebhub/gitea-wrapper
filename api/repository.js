@@ -22,8 +22,8 @@ function GenPassword(username) {
 }
 
 const gogsRequest = Promise.coroutine(function*(options) {
-    let username = server.gogs.username;
-    let password = server.gogs.password;
+    let username = options.username || server.gogs.username;
+    let password = options.password || server.gogs.password;
     let headers = options.headers || {};
 
     let requestOptions = {
