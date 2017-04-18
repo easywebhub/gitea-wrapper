@@ -4,20 +4,33 @@ const Restify = require('restify');
 const Crypto = require('crypto');
 const Promise = require('bluebird');
 const Request = require('request-promise');
+const Fs = require('fs');
+const Path = require('path');
 const _ = require('lodash');
 const Url = require('url');
+const CloudFlareClient = require('cloudflare');
+
 // Request.debug = true;
 
 const GOGS_API_PREFIX = '/api/v1';
 
-const STATIC_SALT = 'nhin thay la se biet'; // pointless
+const staticSalt = 'nhin thay la se biet'; // pointless
+const publicIp = '163.172.149.161';
+const baseDomain = 'easywebhub.me';
+const repositoryDir = 'D:\\Project\\ms-site-builder\\repositories';
+const nginxConfDir = 'D:\\Project\\ewh-full\\nginx\\conf';
+const cfClient = new CloudFlareClient({
+    email: 'contact@vinaas.com',
+    key:   '79e7ac8b61f3c481c6182a523fbf320b74b07'
+});
 let server;
+
 
 function GenPassword(username) {
     let hasher = Crypto.createHash('sha256');
 
     hasher.update(username);
-    hasher.update(STATIC_SALT);
+    hasher.update(staticSalt);
     return hasher.digest('hex');
 }
 
@@ -473,7 +486,7 @@ module.exports = sv => {
         url: '/repos/:username/:repositoryName/hooks/:id', validation: {
             resources: {
                 username:       {isRequired: true, isAlphanumeric: true},
-                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]$/},
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
                 id:             {isRequired: true, isAlphanumeric: true}
             }
         }
@@ -492,6 +505,85 @@ module.exports = sv => {
             return next(new Restify.ExpectationFailedError(response.body));
         } catch (error) {
             return next(new Restify.InternalServerError(error.message));
+        }
+    }));
+
+    // create cloudflare sub domain
+    let cachedZoneId = '';
+    server.post({
+        url: '/repos/:username/:repositoryName/create-cloudflare-subdomain', validation: {
+            resources: {
+                username:       {isRequired: true, isAlphanumeric: true},
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+            }
+        }
+    }, Promise.coroutine(function*(req, res, next) {
+        try {
+            let subDomain = `${req.params.repositoryName}`;
+            // TODO create random domain name if repository name is invalid domain name
+
+            // get cloudflare domains (zone)
+            if (!cachedZoneId) {
+                let zones = yield cfClient.browseZones({name: baseDomain});
+                if (zones.count !== 1) {
+                    console.log('zones', zones);
+                    return next(new Restify.InternalServerError('base domain zone not found'));
+                }
+                cachedZoneId = zones.result[0].id;
+            }
+
+            // get dns list of domain
+            yield cfClient.addDNS(CloudFlareClient.DNSRecord.create({
+                "zone_id": cachedZoneId,
+                "type":    'A',
+                "name":    subDomain + '.' + baseDomain,
+                "content": publicIp,
+                "proxied": true
+            }));
+
+            res.end();
+        } catch (error) {
+            try {
+                let errMsg = error.response.body.errors[0].message;
+                return next(new Restify.InternalServerError(errMsg));
+            } catch (err) {
+                return next(new Restify.InternalServerError(error.message));
+            }
+        }
+    }));
+
+    // create nginx virtual host
+    server.post({
+        url: '/repos/:username/:repositoryName/create-nginx-virtual-host', validation: {
+            resources: {
+                username:       {isRequired: true, isAlphanumeric: true},
+                repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+            }
+        }
+    }, Promise.coroutine(function*(req, res, next) {
+        try {
+            // find exists subdomain :repositoryName.:username.site
+            // create new virtual host config
+            // write config
+            let domain = `${repositoryName}-${username}`;
+            let root = ``;
+            let config = `server {
+    listen 80;
+    listen [::]:80;
+
+    root ${root};
+    index index.html index.htm;
+
+    server_name ${domain};
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+
+`;
+            Fs.writeFile('domain.com', config);
+        } catch (error) {
         }
     }));
 
