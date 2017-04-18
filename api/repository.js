@@ -4,7 +4,7 @@ const Restify = require('restify');
 const Crypto = require('crypto');
 const Promise = require('bluebird');
 const Request = require('request-promise');
-const Fs = require('fs');
+const WriteFile = Promise.promisify(require('fs').writeFile);
 const Path = require('path');
 const _ = require('lodash');
 const Url = require('url');
@@ -519,7 +519,7 @@ module.exports = sv => {
         }
     }, Promise.coroutine(function*(req, res, next) {
         try {
-            let subDomain = `${req.params.repositoryName}`;
+            let subDomain = `${req.params.repositoryName}.${req.params.username}`;
             // TODO create random domain name if repository name is invalid domain name
 
             // get cloudflare domains (zone)
@@ -565,8 +565,9 @@ module.exports = sv => {
             // find exists subdomain :repositoryName.:username.site
             // create new virtual host config
             // write config
-            let domain = `${repositoryName}-${username}`;
-            let root = ``;
+            let subDomain = `${req.params.repositoryName}.${req.params.username}`;
+            let domain = `${subDomain}.${baseDomain}`;
+            let root = Path.resolve(`${repositoryDir}/${req.params.username}/${req.params.repositoryName}`);
             let config = `server {
     listen 80;
     listen [::]:80;
@@ -582,8 +583,12 @@ module.exports = sv => {
 }
 
 `;
-            Fs.writeFile('domain.com', config);
+            yield WriteFile(Path.join(nginxConfDir, 'sites-enabled', domain + '.conf'), config);
+            yield WriteFile(Path.join(nginxConfDir, 'sites-available', domain + '.conf'), config);
+            // TODO trigger nginx reload
+            res.end();
         } catch (error) {
+            return next(new Restify.InternalServerError(error.message));
         }
     }));
 
