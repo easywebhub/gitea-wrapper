@@ -34,6 +34,10 @@ function GenPassword(username) {
     return hasher.digest('hex');
 }
 
+function GenUsername(email) {
+    return email.replace(/[@.]/g, '-');
+}
+
 const gogsRequest = Promise.coroutine(function*(options) {
     let username = options.username || server.gogs.username;
     let password = options.password || server.gogs.password;
@@ -138,25 +142,25 @@ const getUserInfo = Promise.coroutine(function*(username) {
     return res.body;
 });
 
-const createUser = Promise.coroutine(function*(username) {
+const createUser = Promise.coroutine(function*(username, email) {
     let url = server.gogs.url + GOGS_API_PREFIX + `/admin/users`;
     // NOTE if username is 'user' gogs will fail
     let postData = {
         username: username,
-        email:    `${username}@email.com`,
+        email:    email,
         password: GenPassword(username)
     };
     let res = yield gogsPost(url, postData);
     return res.body;
 });
 
-const createUserIfNotExists = Promise.coroutine(function*(username) {
+const createUserIfNotExists = Promise.coroutine(function*(username, email) {
     let user = yield getUserInfo(username);
     // console.log('createUserIfNotExists user', user);
     if (user)
         return user;
 
-    return yield createUser(username);
+    return yield createUser(username, email);
 });
 
 const extractGogsRepoInfo = function (gogsRepoInfo) {
@@ -212,7 +216,7 @@ module.exports = sv => {
     server.post({
         url: '/migration', validation: {
             resources: {
-                username:       {isRequired: true, isAlphanumeric: true},
+                email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
                 templateName:   {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
                 repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
             }
@@ -220,12 +224,13 @@ module.exports = sv => {
     }, Promise.coroutine(function*(req, res, next) {
         try {
             // create user if not exists
-            let user = yield createUserIfNotExists(req.params.username);
-            let password = GenPassword(req.params.username);
+            let username = GenUsername(req.params.email);
+            let user = yield createUserIfNotExists(username, req.params.email);
+            let password = GenPassword(username);
             // get csrf token from GET http://localhost:3000/repo/migrate
             let migrationRepoUrl = server.gogs.url + `/repo/migrate`;
 
-            let html = yield gogsGet(migrationRepoUrl, req.params.username, password);
+            let html = yield gogsGet(migrationRepoUrl, username, password);
             if (html.statusCode !== 200)
                 return next(new Restify.InternalServerError('invalid user credential'));
             let csrfToken = GetCsrfToken(html.body);
@@ -243,7 +248,7 @@ module.exports = sv => {
                 repo_name:     req.params.repositoryName,
                 private:       'on',
                 description:   ''
-            }, req.params.username, password);
+            }, username, password);
 
             if (response.statusCode !== 200) {
                 return next(new Restify.InternalServerError(response.body));
@@ -259,7 +264,7 @@ module.exports = sv => {
                 }
             } else {
                 console.log('migration success');
-                let repoInfo = yield getRepoInfo(req.params.username, req.params.repositoryName);
+                let repoInfo = yield getRepoInfo(username, req.params.repositoryName);
                 res.json(repoInfo);
             }
         } catch (error) {
@@ -296,17 +301,18 @@ module.exports = sv => {
     server.post({
         url: '/repos', validation: {
             resources: {
-                username:       {isRequired: true, isAlphanumeric: true},
+                email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
                 repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
             }
         }
     }, Promise.coroutine(function*(req, res, next) {
         try {
             // create user if not exists
-            let user = yield createUserIfNotExists(req.params.username);
+            let username = GenUsername(req.params.email);
+            let user = yield createUserIfNotExists(username, req.params.email);
 
             // create repo
-            let createRepoUrl = server.gogs.url + GOGS_API_PREFIX + `/admin/users/${req.params.username}/repos`;
+            let createRepoUrl = server.gogs.url + GOGS_API_PREFIX + `/admin/users/${username}/repos`;
             let response = yield gogsPost(createRepoUrl, {
                 name:    req.params.repositoryName,
                 private: true
@@ -319,8 +325,8 @@ module.exports = sv => {
 
             if (response.statusCode === 201) {
                 let repoInfo = extractGogsRepoInfo(response.body);
-                repoInfo.username = req.params.username;
-                repoInfo.password = GenPassword(req.params.username);
+                repoInfo.username = username;
+                repoInfo.password = GenPassword(username);
 
                 // add username and password to gogs repo's url
                 let uri = Url.parse(repoInfo.url);
@@ -586,6 +592,8 @@ module.exports = sv => {
             yield WriteFile(Path.join(nginxConfDir, 'sites-enabled', domain + '.conf'), config);
             yield WriteFile(Path.join(nginxConfDir, 'sites-available', domain + '.conf'), config);
             // TODO trigger nginx reload
+            // service nginx reload or /etc/init.d/nginx reload
+            // nginx -s reload
             res.end();
         } catch (error) {
             return next(new Restify.InternalServerError(error.message));
