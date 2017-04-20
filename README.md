@@ -1,3 +1,12 @@
+### Tính năng
+
+1. tao new website tren db Thanh`
+2. new repos tren gitea (migration tu 1 template)
+3. new cloudflare subdomain
+4. new virtual host
+5. la call init qua ben ms-site-build
+6. sẽ nằm cùng vps với ms-site-build
+
 ### Run parameters
 `node index.js --host=0.0.0.0 --port=7000 --gogsUsername=root --gogsPassword=pass --gogsUrl=http://127.0.0.1:3000`
 * `host` network interface app will listening to, default to `127.0.0.1` (Required)
