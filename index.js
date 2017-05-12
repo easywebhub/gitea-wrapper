@@ -481,13 +481,13 @@ server.post({
             postData.config.secret = req.params.secret;
         }
 
-        let response = yield gogsPost(repoWebHookUrl, postData, req.params.username, password);
+        let response = yield gogsPost(repoWebHookUrl, postData);
 
         if (response.statusCode === 201) {
             res.json(extractGogsWebHookInfo(response.body));
             return res.end();
         }
-        return next(new Restify.ExpectationFailedError(response.body));
+        return next(new Restify.ExpectationFailedError(response.body === undefined ? 'no repository yet or invalid credential' : response.body));
     } catch (error) {
         return next(new Restify.InternalServerError(error.message));
     }
