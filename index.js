@@ -457,7 +457,7 @@ server.post({
             username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             url:            {isRequired: true, isUrl: true},
-            secret:         {isRequired: false, regex: /^[0-9a-zA-Z\-_]+$/},
+            secret:         {isRequired: false, regex: /^[0-9a-zA-Z \-_]+$/},
 
         }
     }
@@ -501,7 +501,7 @@ server.patch({
             id:       {isRequired: true, isAlphanumeric: true},
             url:      {isRequired: false, isUrl: true},
             active:   {isRequired: false, isIn: ['false', 'true']},
-            secret:   {isRequired: false, regex: /^[0-9a-zA-Z\-_]+$/}
+            secret:   {isRequired: false, regex: /^[0-9a-zA-Z \-_]+$/}
         }
     }
 }, Promise.coroutine(function*(req, res, next) {
