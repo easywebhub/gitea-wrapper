@@ -165,6 +165,7 @@ const createUser = Promise.coroutine(function*(username, email) {
 
 const createUserIfNotExists = Promise.coroutine(function*(username, email) {
     let user = yield getUserInfo(username);
+    email = email || `${username}@email.com`; // TODO NOTICE THIS
     // console.log('createUserIfNotExists user', user);
     if (user)
         return user;
@@ -347,15 +348,19 @@ const getRepoInfo = Promise.coroutine(function*(username, repoName) {
 server.post({
     url: '/repos', validation: {
         resources: {
-            email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
+            // email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
+            username:       {isRequired: true, isAlphanumeric: true},
             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
         }
     }
 }, Promise.coroutine(function*(req, res, next) {
     try {
         // create user if not exists
-        let username = GenUsername(req.params.email);
-        let user = yield createUserIfNotExists(username, req.params.email);
+        // let username = GenUsername(req.params.email);
+        // let user = yield createUserIfNotExists(username, req.params.email);
+        let username = req.params.username;
+        let user = yield createUserIfNotExists(req.params.username);
+        let password = GenPassword(req.params.username);
 
         // create repo
         let createRepoUrl = server.gogs.url + GOGS_API_PREFIX + `/admin/users/${username}/repos`;
