@@ -13,10 +13,12 @@
 * `port` local listening port (Required)
 * `gogsUsername` gogs server admin username (Required)
 * `gogsPassword` gogs server admin password (Required)
+* `gogsTemplateUsername` gogs templates account username (Required for migration)
+* `gogsTemplatePassword` gogs templates account password (Required for migration)
 * `gogsUrl` gogs server access url (Required)
 
 ### Alternative config environent variable
-`SERVER_HOST, SERVER_PORT, GOGS_USERNAME, GOGS_PASSWORD, GOGS_URL`
+`SERVER_HOST, SERVER_PORT, GOGS_USERNAME, GOGS_PASSWORD, GOGS_URL, GOGS_TEMPLATE_USERNAME, GOGS_TEMPLATE_PASSWORD`
 
 ### REST API
 * http status code khác 200 là lỗi, response body
