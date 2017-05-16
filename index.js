@@ -158,7 +158,8 @@ const createUser = Promise.coroutine(function*(username, email) {
     let postData = {
         username: username,
         email:    email,
-        password: GenPassword(username)
+        password: GenPassword(username),
+        allow_create_organization: 'off'
     };
     let res = yield gogsPost(url, postData);
     return res.body;
