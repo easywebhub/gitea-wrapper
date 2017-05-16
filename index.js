@@ -288,13 +288,13 @@ server.post({
         let uid = GetUid(html.body);
 
         // migration POST repo http://localhost:3000/repo/migrate
-        let templateRepositoryUrl = `http://localhost:${GOGS_PORT}/${server.gogs.templateUsername}/${req.params.templateName}.git`;
-
+        let templateRepositoryUrl = `http://${server.gogs.templateUsername}:${server.gogs.templatePassword}@localhost:${GOGS_PORT}/${server.gogs.templateUsername}/${req.params.templateName}.git`;
+        console.log('migration templateRepositoryUrl', templateRepositoryUrl);
         let response = yield gogsPostForm(migrationRepoUrl, {
             _csrf:         csrfToken,
             clone_addr:    templateRepositoryUrl,
-            auth_username: server.gogs.templateUsername,
-            auth_password: server.gogs.templatePassword,
+            auth_username: '',
+            auth_password: '',
             uid:           uid,
             repo_name:     req.params.repositoryName,
             private:       'on',
@@ -307,8 +307,8 @@ server.post({
 
         // migration failed too
         if (response.body.indexOf('master') === -1) {
-            let matches = response.body.match(/ui negative message">[\r\n\s.]+<p>(.+)<\/p>/);
-            if (matches.length === 2) {
+            let matches = response.body.match(/ui negative message">[\r\n\s.]+<p>(.+)/m);
+            if (matches && matches.length && matches.length === 2) {
                 return next(new Restify.InternalServerError(matches[1]));
             } else {
                 return next(new Restify.InternalServerError('migration failed, invalid src repository ?'));
