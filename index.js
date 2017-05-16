@@ -156,9 +156,9 @@ const createUser = Promise.coroutine(function*(username, email) {
     let url = server.gogs.url + GOGS_API_PREFIX + `/admin/users`;
     // NOTE if username is 'user' gogs will fail
     let postData = {
-        username: username,
-        email:    email,
-        password: GenPassword(username),
+        username:                  username,
+        email:                     email,
+        password:                  GenPassword(username),
         allow_create_organization: 'off'
     };
     let res = yield gogsPost(url, postData);
@@ -266,7 +266,7 @@ server.post({
     url: '/migration', validation: {
         resources: {
             // email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
-            username:       {isRequired: true, isAlphanumeric: true},
+            username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
             templateName:   {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
         }
@@ -353,7 +353,7 @@ server.post({
     url: '/repos', validation: {
         resources: {
             // email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
-            username:       {isRequired: true, isAlphanumeric: true},
+            username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
         }
     }
@@ -401,7 +401,7 @@ server.post({
 server.get({
     url: '/repos/:username', validation: {
         resources: {
-            username: {isRequired: true, isAlphanumeric: true}
+            username: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
         }
     }
 }, Promise.coroutine(function*(req, res, next) {
@@ -432,7 +432,7 @@ server.get({
 server.get({
     url: '/repos/:username/:repositoryName/hooks', validation: {
         resources: {
-            username:       {isRequired: true, isAlphanumeric: true},
+            username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
         }
     }
@@ -506,7 +506,7 @@ server.post({
 server.patch({
     url: '/repos/:username/:repositoryName/hooks/:id', validation: {
         resources: {
-            username: {isRequired: true, isAlphanumeric: true},
+            username: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             id:       {isRequired: true, isAlphanumeric: true},
             url:      {isRequired: false, isUrl: true},
             active:   {isRequired: false, isIn: ['false', 'true']},
@@ -546,7 +546,7 @@ server.patch({
 server.del({
     url: '/repos/:username/:repositoryName/hooks/:id', validation: {
         resources: {
-            username:       {isRequired: true, isAlphanumeric: true},
+            username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             id:             {isRequired: true, isAlphanumeric: true}
         }
