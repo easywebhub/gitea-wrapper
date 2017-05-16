@@ -266,7 +266,7 @@ server.post({
     url: '/migration', validation: {
         resources: {
             // email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
-            username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
+            username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             templateName:   {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
         }
