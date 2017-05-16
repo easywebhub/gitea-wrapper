@@ -263,7 +263,8 @@ const cfClient = new CloudFlareClient({
 server.post({
     url: '/migration', validation: {
         resources: {
-            email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
+            // email:          {isRequired: true, regex: /^[0-9a-zA-Z\-_@.]+$/},
+            username:       {isRequired: true, isAlphanumeric: true},
             templateName:   {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/}
         }
@@ -271,8 +272,9 @@ server.post({
 }, Promise.coroutine(function*(req, res, next) {
     try {
         // create user if not exists
-        let username = GenUsername(req.params.email);
-        let user = yield createUserIfNotExists(username, req.params.email);
+        // let username = GenUsername(req.params.email);
+        let username = req.params.username;
+        let user = yield createUserIfNotExists(username);
         let password = GenPassword(username);
         // get csrf token from GET http://localhost:3000/repo/migrate
         let migrationRepoUrl = server.gogs.url + `/repo/migrate`;
