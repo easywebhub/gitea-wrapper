@@ -19,6 +19,7 @@ const PORT = argv.port || process.env.SERVER_PORT || 7000;
 const HOST = argv.host || process.env.SERVER_HOST || '127.0.0.1';
 const GOGS_USERNAME = argv.gogsUsername || process.env.GOGS_USERNAME || 'admin';
 const GOGS_PASSWORD = argv.gogsPassword || process.env.GOGS_PASSWORD || 'pass';
+const GOGS_PORT = argv.gogsPort || process.env.GOGS_PORT || 3000;
 const GOGS_TEMPLATE_USERNAME = argv.gogsTemplateUsername || process.env.GOGS_TEMPLATE_USERNAME || 'templates';
 const GOGS_TEMPLATE_PASSWORD = argv.gogsTemplatePassword || process.env.GOGS_TEMPLATE_PASWORD || 'templatesquantri';
 const GOGS_URL = argv.gogsUrl || process.env.GOGS_URL || 'http://127.0.0.1:3000';
@@ -286,7 +287,7 @@ server.post({
         let uid = GetUid(html.body);
 
         // migration POST repo http://localhost:3000/repo/migrate
-        let templateRepositoryUrl = `${server.gogs.url}/${server.gogs.templateUsername}/${req.params.templateName}.git`;
+        let templateRepositoryUrl = `http://localhost:${GOGS_PORT}/${server.gogs.templateUsername}/${req.params.templateName}.git`;
 
         let response = yield gogsPostForm(migrationRepoUrl, {
             _csrf:         csrfToken,
