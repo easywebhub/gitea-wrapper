@@ -12,6 +12,7 @@ const _ = require('lodash');
 const Url = require('url');
 const CloudFlareClient = require('cloudflare');
 const Spawn = require('child_process').spawn;
+const Coroutine = Promise.coroutine;
 
 const argv = require('minimist')(process.argv.slice(2));
 
@@ -28,7 +29,31 @@ const CLOUDFLARE_KEY = argv.cloudflareKey || process.env.CLOUDFLARE_KEY || '';
 const PUBLIC_IP = argv.publicIp || process.env.PUBLIC_IP || '212.237.15.108';
 const BASE_DOMAIN = argv.baseDomain || process.env.BASE_DOMAIN || 'easywebhub.me';
 const REPOSITORY_DIR = argv.repositoryDir || process.env.REPOSITORY_DIR || '/app/ms-site-builder/repositories';
-const NGINX_CONF_DIR = argv.nginxConfDir || process.env.NGINX_CONF_DIR || ' /etc/nginx';
+const NGINX_CONF_DIR = argv.nginxConfDir || process.env.NGINX_CONF_DIR || '/etc/nginx';
+const GIT_HOOK_SECRET = argv.gitHookSecret || process.env.GIT_HOOK_SECRET || 'bay gio da biet';
+
+const GITHUB_USERNAME = argv.githubUsername || process.env.GITHUB_USERNAME || '';
+const GITHUB_PASSWORD = argv.githubPassword || process.env.GITHUB_PASSWORD || '';
+
+const CreateGitHubRepository = function (projectName, githubUsername, githubPassword) {
+    return Request.post({
+        url:     'https://api.github.com/user/repos',
+        json:    true,
+        headers: {
+            'User-Agent': 'EasyApp'
+        },
+        auth:    {
+            user:            githubUsername,
+            pass:            githubPassword,
+            sendImmediately: true
+        },
+        body:    {
+            name: projectName
+        }
+    });
+};
+
+// CreateGitHubRepository('test--1', GITHUB_USERNAME, GITHUB_PASSWORD);
 
 const GOGS_API_PREFIX = '/api/v1';
 
@@ -143,8 +168,9 @@ const gogsPatch = Promise.coroutine(function*(url, data, username, password) {
     });
 });
 
-const getUserInfo = Promise.coroutine(function*(username) {
-    let url = server.gogs.url + GOGS_API_PREFIX + `/users/${username}`;
+const getUserInfo = Promise.coroutine(function*(username, gitServerUrl) {
+    gitServerUrl = gitServerUrl || server.gogs.url;
+    let url = gitServerUrl + GOGS_API_PREFIX + `/users/${username}`;
     let res = yield gogsGet(url);
     if (res.statusCode === 404)
         return null;
@@ -152,8 +178,9 @@ const getUserInfo = Promise.coroutine(function*(username) {
     return res.body;
 });
 
-const createUser = Promise.coroutine(function*(username, email) {
-    let url = server.gogs.url + GOGS_API_PREFIX + `/admin/users`;
+const createUser = Promise.coroutine(function*(username, email, gitServerUrl) {
+    gitServerUrl = gitServerUrl || server.gogs.url;
+    let url = gitServerUrl + GOGS_API_PREFIX + `/admin/users`;
     // NOTE if username is 'user' gogs will fail
     let postData = {
         username:                  username,
@@ -165,14 +192,15 @@ const createUser = Promise.coroutine(function*(username, email) {
     return res.body;
 });
 
-const createUserIfNotExists = Promise.coroutine(function*(username, email) {
-    let user = yield getUserInfo(username);
+const createUserIfNotExists = Promise.coroutine(function*(username, email, gitServerUrl) {
+    gitServerUrl = gitServerUrl || server.gogs.url;
+    let user = yield getUserInfo(username, gitServerUrl);
     email = email || `${username}@email.com`; // TODO NOTICE THIS
     // console.log('createUserIfNotExists user', user);
     if (user)
         return user;
 
-    return yield createUser(username, email);
+    return yield createUser(username, email, gitServerUrl);
 });
 
 const extractGogsRepoInfo = function (gogsRepoInfo) {
@@ -218,7 +246,7 @@ function GetCsrfToken(html) {
 
 function GetUid(html) {
     let matches = html.match(/id="uid" name="uid" value="([^"]+)"/);
-    if (matches.length !== 2) return null;
+    if (!matches || matches.length !== 2) return null;
     return matches[1];
 }
 
@@ -260,6 +288,54 @@ server.use(RestifyValidation.validationPlugin({
 const cfClient = new CloudFlareClient({
     email: CLOUDFLARE_EMAIL,
     key:   CLOUDFLARE_KEY,
+});
+
+const migration = Coroutine(function*(username, templateName, repositoryName, gitServerUrl) {
+    let user = yield createUserIfNotExists(username, null, gitServerUrl);
+    let password = GenPassword(username);
+    // get csrf token from GET http://localhost:3000/repo/migrate
+    let migrationRepoUrl = gitServerUrl + `/repo/migrate`;
+
+    let html = yield gogsGet(migrationRepoUrl, username, password);
+    if (html.statusCode !== 200)
+        throw new Error('invalid user credential');
+    let csrfToken = GetCsrfToken(html.body);
+    let uid = GetUid(html.body);
+
+    let uri = Url.parse(gitServerUrl);
+
+    // migration POST repo http://localhost:3000/repo/migrate
+    let templateRepositoryUrl = `http://${server.gogs.templateUsername}:${server.gogs.templatePassword}@${uri.host}/${server.gogs.templateUsername}/${templateName}.git`;
+
+    console.log('migration templateRepositoryUrl', templateRepositoryUrl);
+    let response = yield gogsPostForm(migrationRepoUrl, {
+        _csrf:         csrfToken,
+        clone_addr:    templateRepositoryUrl,
+        auth_username: '',
+        auth_password: '',
+        uid:           uid,
+        repo_name:     repositoryName,
+        private:       'on',
+        description:   ''
+    }, username, password);
+
+    if (response.statusCode !== 200) {
+        throw new Error(response.body);
+    }
+
+    // migration failed too
+    if (response.body.indexOf('master') === -1) {
+        let matches = response.body.match(/ui negative message">[\r\n\s.]+<p>(.+)/m);
+        if (matches && matches.length && matches.length === 2) {
+            throw new Error(matches[1]); // template not found or repo name used or gitea migration error
+        } else {
+            throw new Error('migration failed, invalid src repository ?');
+        }
+    } else {
+        console.log('migration success');
+        let repoInfo = yield getRepoInfo(username, repositoryName, gitServerUrl);
+        return repoInfo;
+    }
 });
 
 server.post({
@@ -323,9 +399,10 @@ server.post({
     }
 }));
 
-const getRepoInfo = Promise.coroutine(function*(username, repoName) {
+const getRepoInfo = Promise.coroutine(function*(username, repoName, gitServerUrl) {
+    gitServerUrl = gitServerUrl || server.gogs.url;
     // get all user's repo
-    let createRepoUrl = server.gogs.url + GOGS_API_PREFIX + `/user/repos`;
+    let createRepoUrl = gitServerUrl + GOGS_API_PREFIX + `/user/repos`;
     let password = GenPassword(username);
 
     let response = yield gogsGet(createRepoUrl, username, password);
@@ -378,7 +455,7 @@ server.post({
             return next(new Restify.ConflictError(response.body.message ?
                 response.body.message : JSON.stringify(response.body)));
 
-        if (response.statusCode === 201) {
+        if (response.statusCode === 200 || response.statusCode === 201) {
             let repoInfo = extractGogsRepoInfo(response.body);
             repoInfo.username = username;
             repoInfo.password = GenPassword(username);
@@ -459,6 +536,29 @@ server.get({
     }
 }));
 
+let createWebHook = Coroutine(function*(username, repositoryName, hookUrl, secret, gitServerUrl) {
+    gitServerUrl = gitServerUrl || server.gogs.url;
+    let repoWebHookUrl = gitServerUrl + GOGS_API_PREFIX + `/repos/${username}/${repositoryName}/hooks`;
+
+    let postData = {
+        type:   'gogs',
+        config: {
+            url:          hookUrl,
+            secret:       secret,
+            content_type: 'json'
+        },
+        events: ['push'],
+        active: true
+    };
+
+    let response = yield gogsPost(repoWebHookUrl, postData);
+
+    if (response.statusCode === 200 || response.statusCode === 201) {
+        return extractGogsWebHookInfo(response.body);
+    }
+    throw new Error(response.body === undefined ? 'no repository yet or invalid credential' : response.body);
+});
+
 // create web hook
 server.post({
     url: '/repos/:username/:repositoryName/hooks', validation: {
@@ -472,31 +572,9 @@ server.post({
     }
 }, Promise.coroutine(function*(req, res, next) {
     try {
-        let repoWebHookUrl = server.gogs.url + GOGS_API_PREFIX + `/repos/${req.params.username}/${req.params.repositoryName}/hooks`;
-        let password = GenPassword(req.params.username);
-
-        let postData = {
-            type:   'gogs',
-            config: {
-                url:          req.params.url,
-                secret:       req.params.secret,
-                content_type: 'json'
-            },
-            events: ['push'],
-            active: true
-        };
-
-        if (req.params.secret) {
-            postData.config.secret = req.params.secret;
-        }
-
-        let response = yield gogsPost(repoWebHookUrl, postData);
-
-        if (response.statusCode === 201) {
-            res.json(extractGogsWebHookInfo(response.body));
-            return res.end();
-        }
-        return next(new Restify.ExpectationFailedError(response.body === undefined ? 'no repository yet or invalid credential' : response.body));
+        let webHookInfo = yield createWebHook(req.params.username, req.params.repositoryName, req.params.url, req.params.secret);
+        res.json(webHookInfo);
+        return res.end();
     } catch (error) {
         return next(new Restify.InternalServerError(error.message));
     }
@@ -570,61 +648,101 @@ server.del({
 }));
 
 // create cloudflare sub domain
-let cachedZoneId = '';
-server.post({
-    url: '/repos/create-cloudflare-subdomain', validation: {
-        resources: {
-            username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
-            repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+let cachedZoneIdMap = {};
+const createCloudFlareSubDomain = Coroutine(function*(baseDomain, subDomain, recordType, recordValue) {
+    // TODO handle case domain not accepted by cloudflare
+
+    // get cloudflare domains (zone) and cache it
+    let cachedZoneId = cachedZoneIdMap[baseDomain];
+    if (!cachedZoneId) {
+        // chi co 1 domain easywebhub.me nen 1 cache la du
+        let zones = yield cfClient.browseZones({name: baseDomain});
+        if (zones.count !== 1) {
+            console.log('zones', zones);
+            throw new Error('base domain zone not found');
         }
+        cachedZoneId = zones.result[0].id;
+        cachedZoneIdMap[baseDomain] = cachedZoneId;
     }
-}, Promise.coroutine(function*(req, res, next) {
-    try {
-        let subDomain = `${req.params.repositoryName}.${req.params.username}`;
-        // TODO create random domain name if repository name is invalid domain name
 
-        // get cloudflare domains (zone)
-        if (!cachedZoneId) {
-            // chi co 1 domain easywebhub.me nen 1 cache la du
-            let zones = yield cfClient.browseZones({name: BASE_DOMAIN});
-            if (zones.count !== 1) {
-                console.log('zones', zones);
-                return next(new Restify.InternalServerError('base domain zone not found'));
-            }
-            cachedZoneId = zones.result[0].id;
-        }
+    // get dns list of domain
+    let dnsEntries = yield cfClient.browseDNS(cachedZoneId, {name: subDomain + '.' + baseDomain});
+    let ret;
+    if (dnsEntries.count === 1) {
+        // edit
+        let dnsEntry = dnsEntries.result[0];
+        dnsEntry.type = recordType;
+        dnsEntry.content = recordValue;
+        dnsEntry.proxied = true;
 
-        // get dns list of domain
-        let dnsEntries = yield cfClient.browseDNS(cachedZoneId, {name: subDomain + '.' + BASE_DOMAIN});
-        let ret;
-        if (dnsEntries.count === 1) {
-            // edit
-            let dnsEntry = dnsEntries.result[0];
-            dnsEntry.content = PUBLIC_IP;
-            dnsEntry.proxied = true;
-
-            ret = yield cfClient.editDNS(dnsEntry);
-        } else {
-            // create new
-            ret = yield cfClient.addDNS(CloudFlareClient.DNSRecord.create({
-                "zone_id": cachedZoneId,
-                "type":    'A',
-                "name":    subDomain + '.' + BASE_DOMAIN,
-                "content": PUBLIC_IP,
-                "proxied": true
-            }));
-        }
-
-        res.end('success');
-    } catch (error) {
-        try {
-            let errMsg = error.response.body.errors[0].message;
-            return next(new Restify.InternalServerError(errMsg));
-        } catch (err) {
-            return next(new Restify.InternalServerError(error.message));
-        }
+        ret = yield cfClient.editDNS(dnsEntry);
+    } else {
+        // create new
+        ret = yield cfClient.addDNS(CloudFlareClient.DNSRecord.create({
+            zone_id: cachedZoneId,
+            type:    recordType,
+            name:    subDomain + '.' + baseDomain,
+            content: recordValue,
+            proxied: true
+        }));
     }
-}));
+    return ret;
+});
+
+// server.post({
+//     url: '/repos/create-cloudflare-subdomain', validation: {
+//         resources: {
+//             username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+//             repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+//         }
+//     }
+// }, Promise.coroutine(function*(req, res, next) {
+//     try {
+//         let subDomain = `${req.params.repositoryName}.${req.params.username}`;
+//         // TODO create random domain name if repository name is invalid domain name
+//
+//         // get cloudflare domains (zone)
+//         if (!cachedZoneId) {
+//             // chi co 1 domain easywebhub.me nen 1 cache la du
+//             let zones = yield cfClient.browseZones({name: BASE_DOMAIN});
+//             if (zones.count !== 1) {
+//                 console.log('zones', zones);
+//                 return next(new Restify.InternalServerError('base domain zone not found'));
+//             }
+//             cachedZoneId = zones.result[0].id;
+//         }
+//
+//         // get dns list of domain
+//         let dnsEntries = yield cfClient.browseDNS(cachedZoneId, {name: subDomain + '.' + BASE_DOMAIN});
+//         let ret;
+//         if (dnsEntries.count === 1) {
+//             // edit
+//             let dnsEntry = dnsEntries.result[0];
+//             dnsEntry.content = PUBLIC_IP;
+//             dnsEntry.proxied = true;
+//
+//             ret = yield cfClient.editDNS(dnsEntry);
+//         } else {
+//             // create new
+//             ret = yield cfClient.addDNS(CloudFlareClient.DNSRecord.create({
+//                 "zone_id": cachedZoneId,
+//                 "type":    'A',
+//                 "name":    subDomain + '.' + BASE_DOMAIN,
+//                 "content": PUBLIC_IP,
+//                 "proxied": true
+//             }));
+//         }
+//
+//         res.end('success');
+//     } catch (error) {
+//         try {
+//             let errMsg = error.response.body.errors[0].message;
+//             return next(new Restify.InternalServerError(errMsg));
+//         } catch (err) {
+//             return next(new Restify.InternalServerError(error.message));
+//         }
+//     }
+// }));
 
 // create nginx virtual host
 server.post({
@@ -655,7 +773,6 @@ server.post({
         try_files $uri $uri/ =404;
     }
 }
-
 `;
         yield WriteFile(Path.join(NGINX_CONF_DIR, 'sites-enabled', domain + '.conf'), config);
         yield WriteFile(Path.join(NGINX_CONF_DIR, 'sites-available', domain + '.conf'), config);
@@ -666,6 +783,132 @@ server.post({
         return next(new Restify.InternalServerError(error.message));
     }
 }));
+
+server.post({
+    url: '/confirm-website', validation: {
+        resources: {
+            username:       {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+            repositoryName: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+            templateName:   {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+
+            // github info
+            githubUsername: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+            githubPassword: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+
+            // cloudflare info
+            cloudflareEmail: {isRequired: true, isEmail: true},
+            cloudflareKey:   {isRequired: true, isAlphanumeric: true},
+            baseDomain:      {isRequired: true, regex: /^[0-9a-zA-Z.\-_]+$/},
+
+            // gitea info
+            sourceServerUrl: {isRequired: true, isUrl: true},
+            gitHookUrl:      {isRequired: true, isUrl: true},  // https://demo.easywebhub.com/web-hook/
+            gitHookSecret:   {isRequired: false, regex: /^[0-9a-zA-Z \-_]+$/},
+
+            // git hook listener
+            gitHookListenerUrl: {isRequired: true, isUrl: true}
+        }
+    }
+}, Promise.coroutine(function*(req, res, next) {
+    let subDomainName = `${req.params.repositoryName}.${req.params.username}`;
+    let githubRepoName = `${req.params.repositoryName}.${req.params.username}`;
+    let password = GenPassword(req.params.username);
+
+    // migration new gitea repos
+    let migrationResult = yield migration(req.params.username, req.params.templateName, req.params.repositoryName, req.params.sourceServerUrl);
+    console.log('migrationResult', migrationResult);
+    // example success response
+    /**
+     { id: 34,
+      name: 'test-5',
+      fullName: 'test/test-5',
+      url: 'https://sourcecode.easywebhub.com/test/test-5.git',
+      private: true,
+      username: 'test',
+      password: 'b549acb81d1047e4fe8a05cf16385c1ff3061a9d6bd0c808ab178c1a5eac319c' }
+     */
+
+        // add webhook to git server
+    let createGitHookResult = yield createWebHook(req.params.username,
+        req.params.repositoryName,
+        req.params.gitHookUrl,
+        req.params.gitHookSecret,
+        req.params.sourceServerUrl);
+    console.log('createGitHookResult', createGitHookResult);
+
+    // create github repository repositoryName.userName
+    let createGitHubRepositoryResult = yield CreateGitHubRepository(githubRepoName, req.params.githubUsername, req.params.githubPassword);
+    // console.log('createGitHubRepositoryResult', createGitHubRepositoryResult);
+
+    // create cloudflare subdomain
+    let createCloudFlareSubDomainResult = yield createCloudFlareSubDomain(
+        req.params.baseDomain,
+        subDomainName,
+        'CNAME',
+        `${req.params.githubUsername}.github.io`);
+    // console.log('createCloudFlareSubDomainResult', createCloudFlareSubDomainResult);
+
+    // add webhook config to git-hook-listener
+    // create gitea repo url with auth info
+    let uri = Url.parse(migrationResult.url);
+    uri.auth = `${migrationResult.username}:${migrationResult.password}`;
+    let repoUrlWithAuthInfo = Url.format(uri);
+
+    // create github repo url with auth info
+    uri = Url.parse(createGitHubRepositoryResult.clone_url);
+    uri.auth = `${req.params.githubUsername}:${req.params.githubPassword}`;
+    let repoGitHubUrlWithAuthInfo = Url.format(uri);
+    console.log('repoUrlWithAuthInfo', repoUrlWithAuthInfo);
+    let repoPath = `repositories/${req.params.username}-${req.params.repositoryName}`;
+    let webHookListenerConfig = {
+        "repoUrl":     repoUrlWithAuthInfo,
+        "branch":      "gh-pages",
+        "cloneBranch": "gh-pages",
+        "path":        repoPath,
+        "args":        [],
+        "then":        [
+            {
+                "command": "git",
+                "args":    [
+                    "remote",
+                    "add",
+                    "github",
+                    repoGitHubUrlWithAuthInfo
+                ],
+                "options": {
+                    "cwd": repoPath
+                }
+            },
+            {
+                "command": "git",
+                "args":    [
+                    "push",
+                    "--force",
+                    "github",
+                    "HEAD:gh-pages"
+                ],
+                "options": {
+                    "cwd": repoPath
+                }
+            }
+        ]
+    };
+
+    let createWebHookListenerConfigResponse = yield Request({
+        method: 'post',
+        url:    req.params.gitHookListenerUrl,
+        json:   true,
+        body:   webHookListenerConfig
+    });
+    console.log('createWebHookListenerConfigResponse', createWebHookListenerConfigResponse);
+
+    res.json({
+        'Source': migrationResult.url, //'https://sourcecode.easywebhub.com/username/websitename.git',
+        'Git':    createGitHubRepositoryResult.clone_url, // 'https://ewh-account.github.io/websiteName.userName.git'
+        'Url':    `${req.params.repositoryName}.${req.params.username}.${req.params.baseDomain}`//'websiteName.userName.easywebhub.me'
+    });
+}));
+
 
 server.listen(PORT, HOST, () => {
     console.log('%s listening at %s', server.name, server.url);

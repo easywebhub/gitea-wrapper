@@ -7,3 +7,4 @@
 /gitea/indexers
 /gitea/lfs
 /gitea/log
+/yarn.lock
