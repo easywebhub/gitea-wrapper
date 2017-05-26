@@ -115,3 +115,30 @@
 
 #### Delete WebHook of repository `DELETE` `/repos/:username/:repositoryName/hooks/:webHookId`
 ##### Response nothing
+
+#### Confirm website `POST` `/confirm-website`
+##### post data
+```apple js
+{
+	"username":       "",
+	"repositoryName": "",
+	"templateName":   "", // template name to migration
+	"githubUsername": "", // need for create github project
+	"githubPassword": "", // need for create github project
+	"cloudflareEmail": "",
+	"cloudflareKey":   "",
+	"baseDomain":      "", // base domain of cloudflare account eg. easywebhub.me
+	"sourceServerUrl": "", // gitea server url eg. https://sourcecode.easywebhub.com
+	"gitHookUrl": "",  // url gitea will call when there is push event eg. "https://demo.easywebhub.com/web-hook"
+	"gitHookSecret": "bay gio da biet", // must match with gitHookListener
+	"gitHookListenerUrl": "" // eg. https://demo.easywebhub.com/repositories
+}
+```
+#### response
+```apple js
+{
+  "Source": "https://sourcecode.easywebhub.com/test/test-15.git",
+  "Git": "https://github.com/nemesisqp/test-15.test.git",
+  "Url": "test-15.test.commufield.com"
+}
+```
