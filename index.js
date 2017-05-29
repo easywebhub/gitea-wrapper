@@ -903,7 +903,7 @@ server.post({
     console.log('createWebHookListenerConfigResponse', createWebHookListenerConfigResponse);
 
     res.json({
-        'Source': migrationResult.url, //'https://sourcecode.easywebhub.com/username/websitename.git',
+        'Source': repoUrlWithAuthInfo, //'https://sourcecode.easywebhub.com/username/websitename.git',
         'Git':    createGitHubRepositoryResult.clone_url, // 'https://ewh-account.github.io/websiteName.userName.git'
         'Url':    `${req.params.repositoryName}.${req.params.username}.${req.params.baseDomain}`//'websiteName.userName.easywebhub.me'
     });
