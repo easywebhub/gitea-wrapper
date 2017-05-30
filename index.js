@@ -810,103 +810,107 @@ server.post({
         }
     }
 }, Promise.coroutine(function*(req, res, next) {
-    let subDomainName = `${req.params.repositoryName}.${req.params.username}`;
-    let githubRepoName = `${req.params.repositoryName}.${req.params.username}`;
-    let password = GenPassword(req.params.username);
+    try {
+        let subDomainName = `${req.params.repositoryName}.${req.params.username}`;
+        let githubRepoName = `${req.params.repositoryName}.${req.params.username}`;
+        let password = GenPassword(req.params.username);
 
-    // migration new gitea repos
-    let migrationResult = yield migration(req.params.username, req.params.templateName, req.params.repositoryName, req.params.sourceServerUrl);
-    console.log('migrationResult', migrationResult);
-    // example success response
-    /**
-     { id: 34,
-      name: 'test-5',
-      fullName: 'test/test-5',
-      url: 'https://sourcecode.easywebhub.com/test/test-5.git',
-      private: true,
-      username: 'test',
-      password: 'b549acb81d1047e4fe8a05cf16385c1ff3061a9d6bd0c808ab178c1a5eac319c' }
-     */
+        // migration new gitea repos
+        let migrationResult = yield migration(req.params.username, req.params.templateName, req.params.repositoryName, req.params.sourceServerUrl);
+        console.log('migrationResult', migrationResult);
+        // example success response
+        /**
+         { id: 34,
+          name: 'test-5',
+          fullName: 'test/test-5',
+          url: 'https://sourcecode.easywebhub.com/test/test-5.git',
+          private: true,
+          username: 'test',
+          password: 'b549acb81d1047e4fe8a05cf16385c1ff3061a9d6bd0c808ab178c1a5eac319c' }
+         */
 
-        // add webhook to git server
-    let createGitHookResult = yield createWebHook(req.params.username,
-        req.params.repositoryName,
-        req.params.gitHookUrl,
-        req.params.gitHookSecret,
-        req.params.sourceServerUrl);
-    console.log('createGitHookResult', createGitHookResult);
+            // add webhook to git server
+        let createGitHookResult = yield createWebHook(req.params.username,
+            req.params.repositoryName,
+            req.params.gitHookUrl,
+            req.params.gitHookSecret,
+            req.params.sourceServerUrl);
+        console.log('createGitHookResult', createGitHookResult);
 
-    // create github repository repositoryName.userName
-    let createGitHubRepositoryResult = yield CreateGitHubRepository(githubRepoName, req.params.githubUsername, req.params.githubPassword);
-    // console.log('createGitHubRepositoryResult', createGitHubRepositoryResult);
+        // create github repository repositoryName.userName
+        let createGitHubRepositoryResult = yield CreateGitHubRepository(githubRepoName, req.params.githubUsername, req.params.githubPassword);
+        // console.log('createGitHubRepositoryResult', createGitHubRepositoryResult);
 
-    // create cloudflare subdomain
-    let createCloudFlareSubDomainResult = yield createCloudFlareSubDomain(
-        req.params.baseDomain,
-        subDomainName,
-        'CNAME',
-        `${req.params.githubUsername}.github.io`);
-    // console.log('createCloudFlareSubDomainResult', createCloudFlareSubDomainResult);
+        // create cloudflare subdomain
+        let createCloudFlareSubDomainResult = yield createCloudFlareSubDomain(
+            req.params.baseDomain,
+            subDomainName,
+            'CNAME',
+            `${req.params.githubUsername}.github.io`);
+        // console.log('createCloudFlareSubDomainResult', createCloudFlareSubDomainResult);
 
-    // add webhook config to git-hook-listener
-    // create gitea repo url with auth info
-    let uri = Url.parse(migrationResult.url);
-    uri.auth = `${migrationResult.username}:${migrationResult.password}`;
-    let repoUrlWithAuthInfo = Url.format(uri);
+        // add webhook config to git-hook-listener
+        // create gitea repo url with auth info
+        let uri = Url.parse(migrationResult.url);
+        uri.auth = `${migrationResult.username}:${migrationResult.password}`;
+        let repoUrlWithAuthInfo = Url.format(uri);
 
-    // create github repo url with auth info
-    uri = Url.parse(createGitHubRepositoryResult.clone_url);
-    uri.auth = `${req.params.githubUsername}:${req.params.githubPassword}`;
-    let repoGitHubUrlWithAuthInfo = Url.format(uri);
-    console.log('repoUrlWithAuthInfo', repoUrlWithAuthInfo);
-    let repoPath = `repositories/${req.params.username}-${req.params.repositoryName}`;
-    let webHookListenerConfig = {
-        "repoUrl":     repoUrlWithAuthInfo,
-        "branch":      "gh-pages",
-        "cloneBranch": "gh-pages",
-        "path":        repoPath,
-        "args":        [],
-        "then":        [
-            {
-                "command": "git",
-                "args":    [
-                    "remote",
-                    "add",
-                    "github",
-                    repoGitHubUrlWithAuthInfo
-                ],
-                "options": {
-                    "cwd": repoPath
+        // create github repo url with auth info
+        uri = Url.parse(createGitHubRepositoryResult.clone_url);
+        uri.auth = `${req.params.githubUsername}:${req.params.githubPassword}`;
+        let repoGitHubUrlWithAuthInfo = Url.format(uri);
+        console.log('repoUrlWithAuthInfo', repoUrlWithAuthInfo);
+        let repoPath = `repositories/${req.params.username}-${req.params.repositoryName}`;
+        let webHookListenerConfig = {
+            "repoUrl":     repoUrlWithAuthInfo,
+            "branch":      "gh-pages",
+            "cloneBranch": "gh-pages",
+            "path":        repoPath,
+            "args":        [],
+            "then":        [
+                {
+                    "command": "git",
+                    "args":    [
+                        "remote",
+                        "add",
+                        "github",
+                        repoGitHubUrlWithAuthInfo
+                    ],
+                    "options": {
+                        "cwd": repoPath
+                    }
+                },
+                {
+                    "command": "git",
+                    "args":    [
+                        "push",
+                        "--force",
+                        "github",
+                        "HEAD:gh-pages"
+                    ],
+                    "options": {
+                        "cwd": repoPath
+                    }
                 }
-            },
-            {
-                "command": "git",
-                "args":    [
-                    "push",
-                    "--force",
-                    "github",
-                    "HEAD:gh-pages"
-                ],
-                "options": {
-                    "cwd": repoPath
-                }
-            }
-        ]
-    };
+            ]
+        };
 
-    let createWebHookListenerConfigResponse = yield Request({
-        method: 'post',
-        url:    req.params.gitHookListenerUrl,
-        json:   true,
-        body:   webHookListenerConfig
-    });
-    console.log('createWebHookListenerConfigResponse', createWebHookListenerConfigResponse);
+        let createWebHookListenerConfigResponse = yield Request({
+            method: 'post',
+            url:    req.params.gitHookListenerUrl,
+            json:   true,
+            body:   webHookListenerConfig
+        });
+        console.log('createWebHookListenerConfigResponse', createWebHookListenerConfigResponse);
 
-    res.json({
-        'Source': repoUrlWithAuthInfo, //'https://sourcecode.easywebhub.com/username/websitename.git',
-        'Git':    createGitHubRepositoryResult.clone_url, // 'https://ewh-account.github.io/websiteName.userName.git'
-        'Url':    `${req.params.repositoryName}.${req.params.username}.${req.params.baseDomain}`//'websiteName.userName.easywebhub.me'
-    });
+        res.json({
+            'Source': repoUrlWithAuthInfo, //'https://sourcecode.easywebhub.com/username/websitename.git',
+            'Git':    createGitHubRepositoryResult.clone_url, // 'https://ewh-account.github.io/websiteName.userName.git'
+            'Url':    `${req.params.repositoryName}.${req.params.username}.${req.params.baseDomain}`//'websiteName.userName.easywebhub.me'
+        });
+    } catch (error) {
+        return next(new Restify.InternalServerError(error.message));
+    }
 }));
 
 
