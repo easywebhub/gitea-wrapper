@@ -305,7 +305,9 @@ const migration = Coroutine(function*(username, templateName, repositoryName, gi
     let uri = Url.parse(gitServerUrl);
 
     // migration POST repo http://localhost:3000/repo/migrate
-    let templateRepositoryUrl = `http://${server.gogs.templateUsername}:${server.gogs.templatePassword}@${uri.host}/${server.gogs.templateUsername}/${templateName}.git`;
+    // let templateRepositoryUrl = `http://${server.gogs.templateUsername}:${server.gogs.templatePassword}@${uri.host}/${server.gogs.templateUsername}/${templateName}.git`;
+    // use localhost gitea url to avoid error gnutls_handshake() failed: Handshake failed
+    let templateRepositoryUrl = `http://${server.gogs.templateUsername}:${server.gogs.templatePassword}@localhost:${GOGS_PORT}/${server.gogs.templateUsername}/${templateName}.git`;
 
     console.log('migration templateRepositoryUrl', templateRepositoryUrl);
     let response = yield gogsPostForm(migrationRepoUrl, {
