@@ -841,15 +841,21 @@ server.post({
 
         // create github repository repositoryName.userName
         let createGitHubRepositoryResult = yield CreateGitHubRepository(githubRepoName, req.params.githubUsername, req.params.githubPassword);
-        console.log('createGitHubRepositoryResult', createGitHubRepositoryResult);
+        // console.log('createGitHubRepositoryResult', createGitHubRepositoryResult);
 
         // create cloudflare subdomain
-        let createCloudFlareSubDomainResult = yield createCloudFlareSubDomain(
-            req.params.baseDomain,
-            subDomainName,
-            'CNAME',
-            `${req.params.githubUsername}.github.io`);
-        console.log('createCloudFlareSubDomainResult', createCloudFlareSubDomainResult);
+        try {
+            let createCloudFlareSubDomainResult = yield createCloudFlareSubDomain(
+                req.params.baseDomain,
+                subDomainName,
+                'CNAME',
+                `${req.params.githubUsername}.github.io`);
+            console.log('createCloudFlareSubDomainResult', createCloudFlareSubDomainResult);
+        } catch(err) {
+            console.log('create cloudflare failed', err);
+            throw new Error('create cloudflare subdomain failed ' + err.message);
+        }
+
 
         // add webhook config to git-hook-listener
         // create gitea repo url with auth info
