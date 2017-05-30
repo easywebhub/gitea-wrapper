@@ -651,14 +651,21 @@ server.del({
 
 // create cloudflare sub domain
 let cachedZoneIdMap = {};
-const createCloudFlareSubDomain = Coroutine(function*(baseDomain, subDomain, recordType, recordValue) {
+const createCloudFlareSubDomain = Coroutine(function*(baseDomain, subDomain, recordType, recordValue, cloudflareEmail, cloudflareKey) {
     // TODO handle case domain not accepted by cloudflare
-
+    console.log('create cloudflare subdomain', baseDomain, subDomain, recordType, recordValue, cloudflareEmail, cloudflareKey);
+    let client = cfClient;
+    if (cloudflareEmail && cloudflareKey) {
+        client = new CloudFlareClient({
+            email: cloudflareEmail,
+            key:   cloudflareKey,
+        });
+    }
     // get cloudflare domains (zone) and cache it
     let cachedZoneId = cachedZoneIdMap[baseDomain];
     if (!cachedZoneId) {
         // chi co 1 domain easywebhub.me nen 1 cache la du
-        let zones = yield cfClient.browseZones({name: baseDomain});
+        let zones = yield client.browseZones({name: baseDomain});
         if (zones.count !== 1) {
             console.log('zones', zones);
             throw new Error('base domain zone not found');
@@ -667,8 +674,10 @@ const createCloudFlareSubDomain = Coroutine(function*(baseDomain, subDomain, rec
         cachedZoneIdMap[baseDomain] = cachedZoneId;
     }
 
+    console.log('create cloudflare subdomain got zone id', cachedZoneId);
+
     // get dns list of domain
-    let dnsEntries = yield cfClient.browseDNS(cachedZoneId, {name: subDomain + '.' + baseDomain});
+    let dnsEntries = yield client.browseDNS(cachedZoneId, {name: subDomain + '.' + baseDomain});
     let ret;
     if (dnsEntries.count === 1) {
         // edit
@@ -677,10 +686,10 @@ const createCloudFlareSubDomain = Coroutine(function*(baseDomain, subDomain, rec
         dnsEntry.content = recordValue;
         dnsEntry.proxied = true;
 
-        ret = yield cfClient.editDNS(dnsEntry);
+        ret = yield client.editDNS(dnsEntry);
     } else {
         // create new
-        ret = yield cfClient.addDNS(CloudFlareClient.DNSRecord.create({
+        ret = yield client.addDNS(CloudFlareClient.DNSRecord.create({
             zone_id: cachedZoneId,
             type:    recordType,
             name:    subDomain + '.' + baseDomain,
@@ -849,9 +858,11 @@ server.post({
                 req.params.baseDomain,
                 subDomainName,
                 'CNAME',
-                `${req.params.githubUsername}.github.io`);
+                `${req.params.githubUsername}.github.io`,
+                req.params.cloudflareEmail,
+                req.params.cloudflareKey);
             console.log('createCloudFlareSubDomainResult', createCloudFlareSubDomainResult);
-        } catch(err) {
+        } catch (err) {
             console.log('create cloudflare failed', err);
             throw new Error('create cloudflare subdomain failed ' + err.message);
         }
