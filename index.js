@@ -653,7 +653,7 @@ server.del({
 let cachedZoneIdMap = {};
 const createCloudFlareSubDomain = Coroutine(function*(baseDomain, subDomain, recordType, recordValue, cloudflareEmail, cloudflareKey) {
     // TODO handle case domain not accepted by cloudflare
-    console.log('create cloudflare subdomain', baseDomain, subDomain, recordType, recordValue, cloudflareEmail, cloudflareKey);
+    // console.log('create cloudflare subdomain', baseDomain, subDomain, recordType, recordValue, cloudflareEmail, cloudflareKey);
     let client = cfClient;
     if (cloudflareEmail && cloudflareKey) {
         client = new CloudFlareClient({
@@ -667,14 +667,14 @@ const createCloudFlareSubDomain = Coroutine(function*(baseDomain, subDomain, rec
         // chi co 1 domain easywebhub.me nen 1 cache la du
         let zones = yield client.browseZones({name: baseDomain});
         if (zones.count !== 1) {
-            console.log('zones', zones);
+            // console.log('zones', zones);
             throw new Error('base domain zone not found');
         }
         cachedZoneId = zones.result[0].id;
         cachedZoneIdMap[baseDomain] = cachedZoneId;
     }
 
-    console.log('create cloudflare subdomain got zone id', cachedZoneId);
+    // console.log('create cloudflare subdomain got zone id', cachedZoneId);
 
     // get dns list of domain
     let dnsEntries = yield client.browseDNS(cachedZoneId, {name: subDomain + '.' + baseDomain});
@@ -861,7 +861,7 @@ server.post({
                 `${req.params.githubUsername}.github.io`,
                 req.params.cloudflareEmail,
                 req.params.cloudflareKey);
-            console.log('createCloudFlareSubDomainResult', createCloudFlareSubDomainResult);
+            // console.log('createCloudFlareSubDomainResult', createCloudFlareSubDomainResult);
         } catch (err) {
             console.log('create cloudflare failed', err);
             throw new Error('create cloudflare subdomain failed ' + err.message);
