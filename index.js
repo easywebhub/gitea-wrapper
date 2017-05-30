@@ -792,18 +792,18 @@ server.post({
             templateName:   {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
 
             // github info
-            githubUsername: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
-            githubPassword: {isRequired: true, regex: /^[0-9a-zA-Z\-_]+$/},
+            githubUsername: {isRequired: true},
+            githubPassword: {isRequired: true},
 
             // cloudflare info
             cloudflareEmail: {isRequired: true, isEmail: true},
             cloudflareKey:   {isRequired: true, isAlphanumeric: true},
-            baseDomain:      {isRequired: true, regex: /^[0-9a-zA-Z.\-_]+$/},
+            baseDomain:      {isRequired: true},
 
             // gitea info
             sourceServerUrl: {isRequired: true, isUrl: true},
             gitHookUrl:      {isRequired: true, isUrl: true},  // https://demo.easywebhub.com/web-hook/
-            gitHookSecret:   {isRequired: false, regex: /^[0-9a-zA-Z \-_]+$/},
+            gitHookSecret:   {isRequired: false},
 
             // git hook listener
             gitHookListenerUrl: {isRequired: true, isUrl: true}
